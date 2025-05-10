@@ -8,33 +8,37 @@ use std::error::Error;
 async fn main() -> Result<(), Box<dyn Error>> {
     let addr = "127.0.0.1:8080";
     let listener = TcpListener::bind(addr).await?;
-    println!("Server listening on port: {}", addr);
+    println!("Server listening on {}", addr);
 
     loop {
         let (mut socket, _) = listener.accept().await?;
-
         tokio::spawn(async move {
-            if let Err(e) = send_file(&mut socket).await {
-                eprintln!("Error sending file through socket: {:?}", e);
+            if let Err(e) = send_file(&mut socket, "init.sh").await {
+                eprintln!("Error sending init.sh: {:?}", e);
+                return;
             }
+            if let Err(e) = send_file(&mut socket, "init.bat").await {
+                eprintln!("Error sending init.bat: {:?}", e);
+                return;
+            }
+            // socket is dropped here, closing the connection
         });
     }
 }
 
-async fn send_file(socket: &mut TcpStream) -> Result<(), Box<dyn Error>> {
-    let file_path = "init.sh";
-
-    // ✅ FIX 1: Handle Result properly with ?
-    let mut file = File::open(file_path)?;
-
+async fn send_file(socket: &mut TcpStream, filename: &str) -> Result<(), Box<dyn Error>> {
+    // Read the file into memory
+    let mut file = File::open(filename)?;
     let mut buffer = Vec::new();
-
-    // ✅ FIX 2: Synchronous read is OK here, but don't forget the ?
     file.read_to_end(&mut buffer)?;
 
-    // ✅ FIX 3: Use async write to socket
+    // 1) Send an 8-byte big-endian length prefix
+    let len = buffer.len() as u64;
+    socket.write_all(&len.to_be_bytes()).await?;
+
+    // 2) Send the actual file bytes
     socket.write_all(&buffer).await?;
-    println!("File sent through socket");
+    println!("Sent `{}` ({} bytes)", filename, len);
 
     Ok(())
 }
