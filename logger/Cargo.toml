@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 async-std = "1.10" 
+walkdir = "2"
 
